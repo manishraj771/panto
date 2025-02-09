@@ -23,7 +23,7 @@ jobs:
 
       - name: Use GitHub Secret
         env:
-          DEPLOY_ACCESS_TOKEN: ${{ secrets.DEPLOY_ACCESS_TOKEN }}  # ✅ Correct Secret Name
+          DEPLOY_ACCESS_TOKEN: ${{ secrets.DEPLOY_ACCESS_TOKEN }}  
         run: |
           echo "Using GitHub Token..."
           echo "DEPLOY_ACCESS_TOKEN is set but hidden in logs."
@@ -33,3 +33,4 @@ jobs:
           echo "Deploying the app..."
           npm run build
           npm run deploy
+        
