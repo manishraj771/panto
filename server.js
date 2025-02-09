@@ -14,7 +14,9 @@ dotenv.config();
 
 const app = express();
 app.use(cookieParser());
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+// app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(cors({ origin: 'https://imaginative-gecko-c95b84.netlify.app', credentials: true }));
+
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
