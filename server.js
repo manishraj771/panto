@@ -142,34 +142,29 @@ app.get('/api/repos', async (req, res) => {
           },
         });
         const githubRepos = await githubResponse.json();
-        // repos = githubRepos.map(repo => ({
-        //   id: repo.id.toString(),
-        //   name: repo.name,
-        //   fullName: repo.full_name,
-        //   description: repo.description,
-        //   url: repo.html_url,
-        //   stars: repo.stargazers_count,
-        //   defaultBranch: repo.default_branch,
-        //   private: repo.private,
-        //   updatedAt: repo.updated_at,
-        //   autoReview: savedRepo?.autoReview || false, // ✅ Ensure autoReview is included
-
-        // }));
         repos = await Promise.all(
           githubRepos.map(async (repo) => {
-            const savedRepo = await Repo.findOne({ id: repo.id.toString() }); // ❌ ERROR: Repo is not imported
-            return {
-              id: repo.id.toString(),
-              name: repo.name,
-              fullName: repo.full_name,
-              description: repo.description,
-              url: repo.html_url,
-              stars: repo.stargazers_count,
-              defaultBranch: repo.default_branch,
-              private: repo.private,
-              updatedAt: repo.updated_at,
-              autoReview: savedRepo?.autoReview || false, // ❌ ERROR: savedRepo is undefined
-            };
+            // ✅ Save to MongoDB
+            const savedRepo = await Repo.findOneAndUpdate(
+              { id: repo.id.toString() },  // Find by ID
+              {
+                $set: {
+                  id: repo.id.toString(),
+                  name: repo.name,
+                  fullName: repo.full_name,
+                  description: repo.description,
+                  url: repo.html_url,
+                  stars: repo.stargazers_count,
+                  defaultBranch: repo.default_branch,
+                  private: repo.private,
+                  updatedAt: repo.updated_at,
+                  autoReview: false, // Default value
+                },
+              },
+              { new: true, upsert: true } // Create if doesn't exist
+            );
+
+            return savedRepo;
           })
         );
         break;
@@ -180,10 +175,39 @@ app.get('/api/repos', async (req, res) => {
 
     res.json(repos);
   } catch (error) {
-    console.error('Error fetching repositories:', error);
+    console.error('❌ Error fetching repositories:', error);
     res.status(500).json({ error: 'Failed to fetch repositories' });
   }
 });
+//         repos = await Promise.all(
+//           githubRepos.map(async (repo) => {
+//             const savedRepo = await Repo.findOne({ id: repo.id.toString() }); // ❌ ERROR: Repo is not imported
+//             return {
+//               id: repo.id.toString(),
+//               name: repo.name,
+//               fullName: repo.full_name,
+//               description: repo.description,
+//               url: repo.html_url,
+//               stars: repo.stargazers_count,
+//               defaultBranch: repo.default_branch,
+//               private: repo.private,
+//               updatedAt: repo.updated_at,
+//               autoReview: savedRepo?.autoReview || false, // ❌ ERROR: savedRepo is undefined
+//             };
+//           })
+//         );
+//         break;
+
+//       default:
+//         return res.status(400).json({ error: 'Unsupported provider' });
+//     }
+
+//     res.json(repos);
+//   } catch (error) {
+//     console.error('Error fetching repositories:', error);
+//     res.status(500).json({ error: 'Failed to fetch repositories' });
+//   }
+// });
 // ✅ Toggle Auto Review Status
 app.post('/api/repos/:id/toggle-auto-review', async (req, res) => {
   try {
@@ -208,11 +232,17 @@ app.post('/api/repos/:id/toggle-auto-review', async (req, res) => {
 app.get('/api/repos/:id/lines', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`🔹 Fetching total lines for repo ID: ${id}`);
+
     const repo = await Repo.findOne({ id });
 
     if (!repo) {
+      console.log("❌ Repository not found in DB");
+
       return res.status(404).json({ error: 'Repository not found' });
     }
+    console.log(`✅ Repository Found: ${repo.name}`);
+
 
     // Clone the repo temporarily
     const repoPath = `/tmp/${repo.name}`;
@@ -224,17 +254,35 @@ app.get('/api/repos/:id/lines', async (req, res) => {
       // Count lines of code
       exec(`find ${repoPath} -type f -exec wc -l {} + | awk '{sum+=$1} END {print sum}'`, (err, stdout) => {
         if (err) {
+          console.error("❌ Error counting lines:", err);
           return res.status(500).json({ error: 'Failed to count lines' });
         }
 
-        res.json({ totalLines: parseInt(stdout.trim(), 10) });
+        const totalLines = parseInt(stdout.trim(), 10);
+        console.log(`✅ Total Lines in Repository: ${totalLines}`);
+
+        res.json({ totalLines });
       });
     });
   } catch (error) {
-    console.error('Error fetching total lines:', error);
+    console.error('❌ Error fetching total lines:', error);
     res.status(500).json({ error: 'Failed to fetch total lines' });
   }
 });
+//       exec(`find ${repoPath} -type f -exec wc -l {} + | awk '{sum+=$1} END {print sum}'`, (err, stdout) => {
+//         if (err) {
+//           return res.status(500).json({ error: 'Failed to count lines' });
+//         }
+//         console.log('Total Lines:', totalLines);
+
+//         res.json({ totalLines: parseInt(stdout.trim(), 10) });
+//       });
+//     });
+//   } catch (error) {
+//     console.error('Error fetching total lines:', error);
+//     res.status(500).json({ error: 'Failed to fetch total lines' });
+//   }
+// });
 
 
 // ✅ Start Server

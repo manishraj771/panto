@@ -4,6 +4,7 @@ const repoSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: String,
   fullName: String,
+  description: String,
   url: String,
   stars: Number,
   defaultBranch: String,
