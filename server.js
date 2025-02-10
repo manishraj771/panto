@@ -253,26 +253,35 @@ app.get('/api/repos/:id/stats', async (req, res) => {
       return res.status(404).json({ error: 'Repository not found' });
     }
 
-    const token = process.env.GITHUB_ACCESS_TOKEN; // Ensure you store a valid GitHub token
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-    };
+    const token = process.env.GITHUB_ACCESS_TOKEN;
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' };
 
-    // ✅ Fetch repository stats from GitHub API
-    const [repoCommits, repoPulls, repoIssues, repoContributors] = await Promise.all([
-      fetch(`https://api.github.com/repos/${repo.fullName}/commits`, { headers }).then(res => res.json()),
-      fetch(`https://api.github.com/repos/${repo.fullName}/pulls`, { headers }).then(res => res.json()),
-      fetch(`https://api.github.com/repos/${repo.fullName}/issues`, { headers }).then(res => res.json()),
-      fetch(`https://api.github.com/repos/${repo.fullName}/contributors`, { headers }).then(res => res.json()),
+    // ✅ Fetch GitHub stats
+    const responses = await Promise.all([
+      fetch(`https://api.github.com/repos/${repo.fullName}/commits`, { headers }),
+      fetch(`https://api.github.com/repos/${repo.fullName}/pulls`, { headers }),
+      fetch(`https://api.github.com/repos/${repo.fullName}/issues`, { headers }),
+      fetch(`https://api.github.com/repos/${repo.fullName}/contributors`, { headers }),
     ]);
 
+    // ✅ Convert responses to JSON
+    const [repoCommits, repoPulls, repoIssues, repoContributors] = await Promise.all(
+      responses.map(res => res.json())
+    );
+
+    // ✅ Log API responses (check if empty)
+    console.log('🔹 Commits Response:', repoCommits);
+    console.log('🔹 Pull Requests Response:', repoPulls);
+    console.log('🔹 Issues Response:', repoIssues);
+    console.log('🔹 Contributors Response:', repoContributors);
+
+    // ✅ Extract data
     const repoStats = {
-      commitCount: repoCommits.length || 0, 
-      pullRequests: repoPulls.length || 0,
-      openIssues: repoIssues.length || 0,
-      contributors: repoContributors.length || 0,
-      lastCommit: repoCommits[0]?.commit?.author?.date || 'Unknown',
+      commitCount: Array.isArray(repoCommits) ? repoCommits.length : 0,
+      pullRequests: Array.isArray(repoPulls) ? repoPulls.length : 0,
+      openIssues: Array.isArray(repoIssues) ? repoIssues.length : 0,
+      contributors: Array.isArray(repoContributors) ? repoContributors.length : 0,
+      lastCommit: repoCommits.length > 0 ? repoCommits[0].commit.author.date : 'Unknown',
     };
 
     res.json(repoStats);
