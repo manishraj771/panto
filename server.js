@@ -245,7 +245,7 @@ app.get('/api/repos/:id/lines', async (req, res) => {
 app.get('/api/repos/:id/stats', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`🔹 Fetching stats for repo ID: ${id}`);
+    console.log(`🔹 Fetching real stats for repo ID: ${id}`);
 
     const repo = await Repo.findOne({ id });
     if (!repo) {
@@ -253,13 +253,26 @@ app.get('/api/repos/:id/stats', async (req, res) => {
       return res.status(404).json({ error: 'Repository not found' });
     }
 
-    // Mock stats for now (Replace with actual data)
+    const token = process.env.GITHUB_ACCESS_TOKEN; // Ensure you store a valid GitHub token
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github.v3+json',
+    };
+
+    // ✅ Fetch repository stats from GitHub API
+    const [repoCommits, repoPulls, repoIssues, repoContributors] = await Promise.all([
+      fetch(`https://api.github.com/repos/${repo.fullName}/commits`, { headers }).then(res => res.json()),
+      fetch(`https://api.github.com/repos/${repo.fullName}/pulls`, { headers }).then(res => res.json()),
+      fetch(`https://api.github.com/repos/${repo.fullName}/issues`, { headers }).then(res => res.json()),
+      fetch(`https://api.github.com/repos/${repo.fullName}/contributors`, { headers }).then(res => res.json()),
+    ]);
+
     const repoStats = {
-      commitCount: Math.floor(Math.random() * 500), // Fake data
-      pullRequests: Math.floor(Math.random() * 50),
-      openIssues: Math.floor(Math.random() * 20),
-      contributors: Math.floor(Math.random() * 10),
-      lastCommit: new Date().toISOString(),
+      commitCount: repoCommits.length || 0, 
+      pullRequests: repoPulls.length || 0,
+      openIssues: repoIssues.length || 0,
+      contributors: repoContributors.length || 0,
+      lastCommit: repoCommits[0]?.commit?.author?.date || 'Unknown',
     };
 
     res.json(repoStats);
@@ -268,6 +281,33 @@ app.get('/api/repos/:id/stats', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch repository stats' });
   }
 });
+
+// app.get('/api/repos/:id/stats', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     console.log(`🔹 Fetching stats for repo ID: ${id}`);
+
+//     const repo = await Repo.findOne({ id });
+//     if (!repo) {
+//       console.error(`❌ Repository not found in DB for ID: ${id}`);
+//       return res.status(404).json({ error: 'Repository not found' });
+//     }
+
+//     // Mock stats for now (Replace with actual data)
+//     const repoStats = {
+//       commitCount: Math.floor(Math.random() * 500), // Fake data
+//       pullRequests: Math.floor(Math.random() * 50),
+//       openIssues: Math.floor(Math.random() * 20),
+//       contributors: Math.floor(Math.random() * 10),
+//       lastCommit: new Date().toISOString(),
+//     };
+
+//     res.json(repoStats);
+//   } catch (error) {
+//     console.error('❌ Error fetching repo stats:', error);
+//     res.status(500).json({ error: 'Failed to fetch repository stats' });
+//   }
+// });
 
 
 const PORT = process.env.PORT || 5000;
