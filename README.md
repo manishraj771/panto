@@ -139,7 +139,7 @@ The application will be available at `http://localhost:5173`.
 
 #### **Get Repository Stats**
 - **Endpoint:** `GET /api/repos/:id/stats`
-- **Description:** Fetches stats including commit count, pull requests, issues, and contributors for a repository.
+- **Description:** Fetches stats including commit count, pull requests and issues, and contributors for a repository.
 
 #### **Get Total Lines of Code**
 - **Endpoint:** `GET /api/repos/:id/lines`
