@@ -1,0 +1,4 @@
+[[redirects]]
+  from = "/auth/callback/github"
+  to = "/"
+  status = 200
