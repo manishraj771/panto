@@ -1,6 +1,6 @@
-# Git Manager
+# Phantom Git Manager
 
-Git Manager is a modern web application that allows you to manage all your Git repositories from different providers (GitHub, GitLab, and Bitbucket) in one centralized dashboard.
+Phantom Git Manager is a web-based tool that allows users to connect with GitHub and GitLab to manage repositories efficiently. Users can authenticate using GitHub OAuth, view repositories, enable auto-review, and track code statistics such as total lines of code, commit history, and pull requests.
 
 ## Features
 
@@ -95,6 +95,23 @@ The application will be available at `http://localhost:5173`.
 ---
 
 ## API Endpoints
+#
+
+## 🔗 API Endpoints
+
+| Method | Endpoint                            | Description                          |
+| ------ | ----------------------------------- | ------------------------------------ |
+| `GET`  | `/api/auth/github`                  | Initiate GitHub OAuth authentication |
+| `POST` | `/api/auth/github/callback`         | GitHub OAuth callback                |
+| `GET`  | `/api/auth/me`                      | Get authenticated user info          |
+| `GET`  | `/api/repos`                        | Fetch user repositories              |
+| `POST` | `/api/repos/:id/toggle-auto-review` | Toggle auto-review feature           |
+| `GET`  | `/api/repos/:id/stats`              | Get repository statistics            |
+| `GET`  | `/api/repos/:id/lines`              | Get total lines of code              |
+
+##
+
+
 
 ### **Authentication**
 
