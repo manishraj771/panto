@@ -1,5 +1,5 @@
 import  { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery,useMutation,useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
@@ -49,6 +49,11 @@ export default function Dashboard() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [showUserMenu, setShowUserMenu] = useState(false);
 
+
+
+
+  
+
   const { data: repos, isLoading } = useQuery({
     queryKey: ['repos'],
     queryFn: async () => {
@@ -61,16 +66,50 @@ export default function Dashboard() {
     },
   });
 
+  const queryClient = useQueryClient();
+  const [autoReviewState, setAutoReviewState] = useState<{ [key: string]: boolean }>({});
+
+  
   const toggleAutoReview = async (repoId: string) => {
+    console.log("🔹 Dashboard - Toggling Auto Review for Repo:", repoId);
+
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/api/repos/${repoId}/toggle-auto-review`
       );
-      alert(`Auto Review is now ${response.data.autoReview ? 'Enabled' : 'Disabled'}`);
+      console.log("✅ Dashboard - API Response:", response.data);
+
+      // ✅ Update local state immediately
+    setAutoReviewState((prevState) => ({
+      ...prevState,
+      [repoId]: response.data.autoReview,
+    }));
+
+      // ✅ UI ko update karne ke liye React Query ka cache invalidate karein
+      queryClient.invalidateQueries({ queryKey: ['repos'] });
+  
     } catch (error) {
       console.error('❌ Error toggling Auto Review:', error);
     }
   };
+
+
+
+  // ye sabse starting wala hain
+  
+  
+  // const toggleAutoReview = async (repoId: string) => {
+  //   try {
+  //     const response = await axios.post(
+  //       `${import.meta.env.VITE_API_URL}/api/repos/${repoId}/toggle-auto-review`
+  //     );
+  //     alert(`Auto Review is now ${response.data.autoReview ? 'Enabled' : 'Disabled'}`);
+  //   } catch (error) {
+  //     console.error('Error toggling Auto Review:', error);
+  //   }
+  // };
+
+
 
   const getTotalLines = async (repoId: string) => {
     try {
@@ -82,7 +121,7 @@ export default function Dashboard() {
       console.error('❌ Error fetching total lines:', error);
     }
   };
-
+ // this is for filter & sort code hai
   const filteredAndSortedRepos = useMemo(() => {
     if (!repos) return [];
 
@@ -279,7 +318,20 @@ export default function Dashboard() {
 
                 {/* Action Bar */}
                 <div className="relative px-6 py-4 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-t border-gray-700/50">
-                  <button
+                <button
+  onClick={() => toggleAutoReview(repo.id)}
+  className={`mt-3 px-4 py-2 rounded-md ${
+    autoReviewState[repo.id] ?? repo.autoReview ? 'bg-green-500 text-white' : 'bg-gray-300 text-black'
+  }`}
+>
+  {autoReviewState[repo.id] ?? repo.autoReview ? 'Disable Auto Review' : 'Enable Auto Review'}
+</button>
+
+
+
+
+
+                  {/* <button
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleAutoReview(repo.id);
@@ -291,7 +343,7 @@ export default function Dashboard() {
                     }`}
                   >
                     {repo.autoReview ? 'Auto Review Enabled' : 'Enable Auto Review'}
-                  </button>
+                  </button> */}
                 </div>
               </div>
             ))}

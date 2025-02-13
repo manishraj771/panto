@@ -75,19 +75,33 @@ export default function RepoDetails() {
     enabled: !!repo,
   });
 
+  // const toggleAutoReviewMutation = useMutation({
+  //   mutationFn: async () => {
+  //     const response = await axios.post(
+  //       `${import.meta.env.VITE_API_URL}/api/repos/${repo.id}/toggle-auto-review`,
+  //       {},
+  //       { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+  //     );
+  //     return response.data;
+  //   },
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['repos'] });
+  //   },
+  // });
+
   const toggleAutoReviewMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (repoId: string) => {
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/repos/${repo.id}/toggle-auto-review`,
-        {},
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        `${import.meta.env.VITE_API_URL}/api/repos/${repoId}/toggle-auto-review`
       );
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['repos'] });
+    onSuccess: (_, repoId) => {
+      console.log("✅ Mutation Successful for Repo:", repoId);
+      queryClient.invalidateQueries({ queryKey: ['repos'] }); // ✅ Refresh repositories
     },
   });
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -213,7 +227,7 @@ export default function RepoDetails() {
                       <p className="text-sm text-gray-400">Automated code review for pull requests</p>
                     </div>
                   </div>
-                  <button
+                  {/* <button
                     onClick={() => toggleAutoReviewMutation.mutate()}
                     className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
                       repo.autoReviewEnabled 
@@ -222,7 +236,15 @@ export default function RepoDetails() {
                     }`}
                   >
                     {repo.autoReviewEnabled ? 'Disable' : 'Enable'}
-                  </button>
+                  </button> */}
+                  <button
+  onClick={() => toggleAutoReviewMutation.mutate(repo.id)}
+  className={`mt-3 px-4 py-2 rounded-md ${
+    repo.autoReviewEnabled ? 'bg-green-500 text-white' : 'bg-gray-300 text-black'
+  }`}
+>
+  {repo.autoReviewEnabled ? 'Disable Auto Review' : 'Enable Auto Review'}
+</button>;
                 </div>
               </div>
             </div>

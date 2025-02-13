@@ -14,8 +14,8 @@ dotenv.config();
 
 const app = express();
 app.use(cookieParser());
-// app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
-app.use(cors({ origin: 'https://imaginative-gecko-c95b84.netlify.app', credentials: true }));
+ app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+//app.use(cors({ origin: 'https://imaginative-gecko-c95b84.netlify.app', credentials: true }));
 
 app.use(express.json());
 
@@ -146,7 +146,7 @@ app.get('/api/repos', async (req, res) => {
         const githubRepos = await githubResponse.json();
         repos = await Promise.all(
           githubRepos.map(async (repo) => {
-            // ✅ Save to MongoDB
+            // Save to MongoDB
             const savedRepo = await Repo.findOneAndUpdate(
               { id: repo.id.toString() },  // Find by ID
               {
@@ -227,7 +227,7 @@ app.get('/api/repos/:id/lines', async (req, res) => {
       // Count lines of code
       exec(`find ${repoPath} -type f -exec wc -l {} + | awk '{sum+=$1} END {print sum}'`, (err, stdout) => {
         if (err) {
-          console.error("❌ Error counting lines:", err);
+          console.error("Error counting lines:", err);
           return res.status(500).json({ error: 'Failed to count lines' });
         }
 
@@ -291,32 +291,6 @@ app.get('/api/repos/:id/stats', async (req, res) => {
   }
 });
 
-// app.get('/api/repos/:id/stats', async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     console.log(`🔹 Fetching stats for repo ID: ${id}`);
-
-//     const repo = await Repo.findOne({ id });
-//     if (!repo) {
-//       console.error(`❌ Repository not found in DB for ID: ${id}`);
-//       return res.status(404).json({ error: 'Repository not found' });
-//     }
-
-//     // Mock stats for now (Replace with actual data)
-//     const repoStats = {
-//       commitCount: Math.floor(Math.random() * 500), // Fake data
-//       pullRequests: Math.floor(Math.random() * 50),
-//       openIssues: Math.floor(Math.random() * 20),
-//       contributors: Math.floor(Math.random() * 10),
-//       lastCommit: new Date().toISOString(),
-//     };
-
-//     res.json(repoStats);
-//   } catch (error) {
-//     console.error('❌ Error fetching repo stats:', error);
-//     res.status(500).json({ error: 'Failed to fetch repository stats' });
-//   }
-// });
 
 
 const PORT = process.env.PORT || 5000;

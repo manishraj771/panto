@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+//export type Provider = 'github' | 'gitlab' | 'bitbucket';
+
 
 export function useAuth() {
   const [user, setUser] = useState<Record<string, any> | null>(null);

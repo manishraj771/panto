@@ -10,7 +10,10 @@ const repoSchema = new mongoose.Schema({
   defaultBranch: String,
   private: Boolean,
   updatedAt: String,
-  autoReview: { type: Boolean, default: false }, // ✅ Auto Review setting
+  autoReview: { type: Boolean, default: false }, 
 });
 
-export default mongoose.model('Repo', repoSchema);
+
+// export default mongoose.model('Repo', repoSchema);
+const Repo = mongoose.model('Repo', repoSchema);
+export default Repo;  // ✅ Correct ES Module Export
