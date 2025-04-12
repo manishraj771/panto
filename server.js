@@ -11,6 +11,7 @@ import State from './models/State.js';
 import Repo from './models/Repo.js';
 import Message from './models/Message.js'; // Import the new model
 import { exec } from 'child_process';
+import axios from 'axios';
 
 
 dotenv.config();
@@ -116,6 +117,7 @@ io.on('connection', (socket) => {
       senderId: socket.user.id,
       receiverId,
       content,
+      status:'delivered', // Add status to Schema
     });
     await message.save();
     console.log('🔹 Saved message:', message); // Log saved message
@@ -129,6 +131,47 @@ io.on('connection', (socket) => {
     console.log('🔹 User disconnected:', socket.id);
   });
 });
+// app.get('/api/github/repos/:username', async (req, res) => {
+//   try {
+//     const { username } = req.params;
+//     const response = await axios.get(`https://api.github.com/users/${username}/repos`, {
+//       headers: {
+//         Authorization: `Bearer ${process.env.GITHUB_ACCESS_TOKEN}`,
+//         Accept: 'application/vnd.github+json',
+//       },
+//       params: {
+//         sort: 'updated',
+//         per_page: 6,
+//       },
+//     });
+//     console.log(`🔹 Fetched repos for ${username}:`, response.data.length); // Debug log
+//     res.json(response.data);
+//   } catch (error) {
+//     console.error('Error fetching repos:', error);
+//     res.status(500).json({ error: 'Failed to fetch repositories' });
+//   }
+// });
+
+// app.get('/api/github/commits/:username/:repo', async (req, res) => {
+//   try {
+//     const { username, repo } = req.params;
+//     const response = await axios.get(`https://api.github.com/repos/${username}/${repo}/commits`, {
+//       headers: {
+//         Authorization: `Bearer ${process.env.GITHUB_ACCESS_TOKEN}`,
+//         Accept: 'application/vnd.github+json',
+//       },
+//       params: {
+//         author: username,
+//         per_page: 100,
+//       },
+//     });
+//     console.log(`🔹 Fetched commits for ${username}/${repo}:`, response.data.length); // Debug log
+//     res.json(response.data);
+//   } catch (error) {
+//     console.error('Error fetching commits:', error);
+//     res.status(500).json({ error: 'Failed to fetch commits' });
+//   }
+// });
 
 
 // ✅ GitHub OAuth Login (Fetch State from MongoDB)
@@ -392,32 +435,6 @@ app.get('/api/repos/:id/stats', async (req, res) => {
   }
 });
 
-// app.get('/api/repos/:id/stats', async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     console.log(`🔹 Fetching stats for repo ID: ${id}`);
-
-//     const repo = await Repo.findOne({ id });
-//     if (!repo) {
-//       console.error(`❌ Repository not found in DB for ID: ${id}`);
-//       return res.status(404).json({ error: 'Repository not found' });
-//     }
-
-//     // Mock stats for now (Replace with actual data)
-//     const repoStats = {
-//       commitCount: Math.floor(Math.random() * 500), // Fake data
-//       pullRequests: Math.floor(Math.random() * 50),
-//       openIssues: Math.floor(Math.random() * 20),
-//       contributors: Math.floor(Math.random() * 10),
-//       lastCommit: new Date().toISOString(),
-//     };
-
-//     res.json(repoStats);
-//   } catch (error) {
-//     console.error('❌ Error fetching repo stats:', error);
-//     res.status(500).json({ error: 'Failed to fetch repository stats' });
-//   }
-// });
 
 
 const PORT = process.env.PORT || 5000;

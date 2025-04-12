@@ -2,16 +2,18 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import io, { Socket } from 'socket.io-client';
 import axios from 'axios';
-import { Send } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid'; // Add uuid for temp IDs
+import { Send, Check, CheckCheck } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   senderId: string;
   receiverId: string;
   content: string;
   timestamp: string;
-  _id?: string; // Server-provided ID
-  tempId?: string; // Temporary ID for optimistic messages
+  _id?: string;
+  tempId?: string;
+  status?: 'sent' | 'delivered';
 }
 
 interface Contact {
@@ -27,10 +29,13 @@ export default function Chat() {
   const [messageInput, setMessageInput] = useState('');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!token || !user) return;
+    if (!token || !user?.id) return;
 
     const newSocket = io(import.meta.env.VITE_API_URL, {
       auth: { token },
@@ -49,21 +54,31 @@ export default function Chat() {
         (message.receiverId === user.id && message.senderId === selectedContact?.id)
       ) {
         setMessages((prev) => {
-          // Replace optimistic message with server message
           const tempIdx = prev.findIndex((m) => m.tempId && m.content === message.content && !m._id);
           if (tempIdx !== -1) {
             const newMessages = [...prev];
-            newMessages[tempIdx] = { ...message, tempId: prev[tempIdx].tempId };
+            newMessages[tempIdx] = { ...message, tempId: prev[tempIdx].tempId, status: 'delivered' };
             console.log('🔹 Replaced optimistic message:', newMessages);
             return newMessages;
           }
-          // Add if not a duplicate
           if (message._id && prev.some((m) => m._id === message._id)) {
             return prev;
           }
           console.log('🔹 Added new message:', [...prev, message]);
           return [...prev, message];
         });
+      } else if (message.receiverId === user.id) {
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [message.senderId]: (prev[message.senderId] || 0) + 1,
+        }));
+      }
+    });
+
+    newSocket.on('typing', (data) => {
+      if (data.senderId === selectedContact?.id && data.receiverId === user.id) {
+        setIsTyping(true);
+        setTimeout(() => setIsTyping(false), 2000);
       }
     });
 
@@ -89,10 +104,10 @@ export default function Chat() {
     return () => {
       newSocket.disconnect();
     };
-  }, [token, user, selectedContact]);
+  }, [token, user?.id, selectedContact]);
 
   useEffect(() => {
-    if (!selectedContact || !token) return;
+    if (!selectedContact || !token || !user?.id) return;
 
     const fetchMessages = async () => {
       try {
@@ -100,37 +115,48 @@ export default function Chat() {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('🔹 Fetched messages for', selectedContact.username, ':', response.data);
-        setMessages(response.data); // Overwrite with server data
+        setMessages(response.data);
+        setUnreadCounts((prev) => ({ ...prev, [selectedContact.id]: 0 }));
       } catch (error) {
         console.error('❌ Error fetching messages:', error);
       }
     };
     fetchMessages();
-  }, [selectedContact, token]);
+  }, [selectedContact, token, user?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const sendMessage = () => {
-    if (!socket || !messageInput || !selectedContact || !user) return;
+    if (!socket || !messageInput || !selectedContact || !user?.id) return;
     const messageData = { receiverId: selectedContact.id, content: messageInput };
     console.log('🔹 Sending message:', messageData);
 
-    // Optimistic update with tempId
     const optimisticMessage: Message = {
       senderId: user.id,
       receiverId: selectedContact.id,
       content: messageInput,
       timestamp: new Date().toISOString(),
-      tempId: uuidv4(), // Unique temp ID
+      tempId: uuidv4(),
+      status: 'sent',
     };
     setMessages((prev) => [...prev, optimisticMessage]);
     socket.emit('sendMessage', messageData);
     setMessageInput('');
   };
 
-  if (!user) return <div className="text-gray-400 text-center">Please log in to chat</div>;
+  const handleTyping = () => {
+    if (socket && selectedContact && user?.id) {
+      socket.emit('typing', { senderId: user.id, receiverId: selectedContact.id });
+    }
+  };
+
+  const openProfile = (username: string) => {
+    navigate(`/user/${username}`); // Navigate to new UserProfile route
+  };
+
+  if (!user?.id) return <div className="text-gray-400 text-center">Please log in to chat</div>;
 
   return (
     <div className="min-h-screen bg-gray-900 p-8 flex flex-col items-center">
@@ -145,12 +171,32 @@ export default function Chat() {
                 <div
                   key={contact.id}
                   onClick={() => setSelectedContact(contact)}
-                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${
+                  className={`flex items-center justify-between gap-2 p-2 rounded-lg cursor-pointer ${
                     selectedContact?.id === contact.id ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-100'
                   }`}
                 >
-                  <img src={contact.avatar} alt={contact.username} className="h-8 w-8 rounded-full" />
-                  <span>{contact.username}</span>
+                  <div
+                    className="flex items-center gap-2 relative group"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openProfile(contact.username);
+                    }}
+                  >
+                    <img
+                      src={contact.avatar}
+                      alt={contact.username}
+                      className="h-8 w-8 rounded-full cursor-pointer hover:opacity-75 transition-opacity"
+                    />
+                    <span className="cursor-pointer hover:underline">{contact.username}</span>
+                    <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs p-1 rounded -top-8 left-0">
+                      View profile
+                    </span>
+                  </div>
+                  {unreadCounts[contact.id] > 0 && (
+                    <span className="bg-red-600 text-white rounded-full px-2 py-1 text-xs">
+                      {unreadCounts[contact.id]}
+                    </span>
+                  )}
                 </div>
               ))
             )}
@@ -162,24 +208,38 @@ export default function Chat() {
           </h2>
           <div className="flex-1 overflow-y-auto mb-4 p-4 bg-gray-900/80 rounded-lg border border-gray-700">
             {selectedContact ? (
-              messages.length === 0 ? (
-                <p className="text-gray-400">No messages yet</p>
-              ) : (
-                messages.map((msg) => (
-                  <div
-                    key={msg._id || msg.tempId} // Use _id or tempId
-                    className={`mb-2 p-2 rounded-lg ${
-                      msg.senderId === user.id ? 'bg-blue-600 text-white ml-auto' : 'bg-gray-700 text-gray-100'
-                    }`}
-                    style={{ maxWidth: '70%' }}
-                  >
-                    <p>{msg.content}</p>
-                    <span className="text-xs text-gray-400">
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))
-              )
+              <>
+                {messages.length === 0 ? (
+                  <p className="text-gray-400">No messages yet</p>
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg._id || msg.tempId}
+                      className={`mb-2 p-2 rounded-lg flex items-end gap-1 ${
+                        msg.senderId === user.id ? 'bg-blue-600 text-white ml-auto' : 'bg-gray-700 text-gray-100'
+                      }`}
+                      style={{ maxWidth: '70%' }}
+                    >
+                      <p>{msg.content}</p>
+                      {msg.senderId === user.id && (
+                        <span className="text-gray-400">
+                          {msg.status === 'delivered' ? (
+                            <CheckCheck className="h-3 w-3" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400 ml-1">
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  ))
+                )}
+                {isTyping && (
+                  <p className="text-gray-400 text-sm italic">{selectedContact.username} is typing...</p>
+                )}
+              </>
             ) : null}
             <div ref={messagesEndRef} />
           </div>
@@ -188,7 +248,10 @@ export default function Chat() {
               <input
                 type="text"
                 value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
+                onChange={(e) => {
+                  setMessageInput(e.target.value);
+                  handleTyping();
+                }}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder="Type a message..."
                 className="flex-1 p-2 bg-gray-700 text-gray-100 rounded-lg"
@@ -210,13 +273,17 @@ export default function Chat() {
 // import { useAuth } from '../hooks/useAuth';
 // import io, { Socket } from 'socket.io-client';
 // import axios from 'axios';
-// import { Send } from 'lucide-react';
+// import { Send, Check, CheckCheck } from 'lucide-react';
+// import { v4 as uuidv4 } from 'uuid';
 
 // interface Message {
 //   senderId: string;
 //   receiverId: string;
 //   content: string;
 //   timestamp: string;
+//   _id?: string;
+//   tempId?: string;
+//   status?: 'sent' | 'delivered';
 // }
 
 // interface Contact {
@@ -232,15 +299,17 @@ export default function Chat() {
 //   const [messageInput, setMessageInput] = useState('');
 //   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 //   const [contacts, setContacts] = useState<Contact[]>([]);
+//   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+//   const [isTyping, setIsTyping] = useState(false);
 //   const messagesEndRef = useRef<HTMLDivElement>(null);
 
 //   useEffect(() => {
-//     if (!token || !user) return;
+//     if (!token || !user?.id) return;
 
 //     const newSocket = io(import.meta.env.VITE_API_URL, {
-//         auth: { token },
-//         transports: ['websocket', 'polling'], // Ensure WebSocket is preferred
-//       });
+//       auth: { token },
+//       transports: ['websocket', 'polling'],
+//     });
 
 //     newSocket.on('connect', () => {
 //       console.log('🔹 Connected to chat server');
@@ -249,24 +318,42 @@ export default function Chat() {
 
 //     newSocket.on('newMessage', (message: Message) => {
 //       console.log('🔹 Received new message:', message);
-//       // Only add if it’s part of the current chat
 //       if (
 //         (message.senderId === user.id && message.receiverId === selectedContact?.id) ||
 //         (message.receiverId === user.id && message.senderId === selectedContact?.id)
 //       ) {
 //         setMessages((prev) => {
-//           // Avoid duplicates
-//           if (prev.some((m) => m.content === message.content && m.timestamp === message.timestamp)) {
+//           const tempIdx = prev.findIndex((m) => m.tempId && m.content === message.content && !m._id);
+//           if (tempIdx !== -1) {
+//             const newMessages = [...prev];
+//             newMessages[tempIdx] = { ...message, tempId: prev[tempIdx].tempId, status: 'delivered' };
+//             console.log('🔹 Replaced optimistic message:', newMessages);
+//             return newMessages;
+//           }
+//           if (message._id && prev.some((m) => m._id === message._id)) {
 //             return prev;
 //           }
+//           console.log('🔹 Added new message:', [...prev, message]);
 //           return [...prev, message];
 //         });
+//       } else if (message.receiverId === user.id) {
+//         setUnreadCounts((prev) => ({
+//           ...prev,
+//           [message.senderId]: (prev[message.senderId] || 0) + 1,
+//         }));
+//       }
+//     });
+
+//     newSocket.on('typing', (data) => {
+//       if (data.senderId === selectedContact?.id && data.receiverId === user.id) {
+//         setIsTyping(true);
+//         setTimeout(() => setIsTyping(false), 2000);
 //       }
 //     });
 
 //     newSocket.on('connect_error', (err) => {
-//         console.error('❌ Connection error:', err.message); // Log connection issues
-//       });
+//       console.error('❌ Connection error:', err.message);
+//     });
 
 //     setSocket(newSocket);
 
@@ -286,10 +373,10 @@ export default function Chat() {
 //     return () => {
 //       newSocket.disconnect();
 //     };
-//   }, [token, user, selectedContact]); // Add selectedContact to deps to re-filter messages
+//   }, [token, user?.id, selectedContact]);
 
 //   useEffect(() => {
-//     if (!selectedContact || !token) return;
+//     if (!selectedContact || !token || !user?.id) return;
 
 //     const fetchMessages = async () => {
 //       try {
@@ -298,35 +385,47 @@ export default function Chat() {
 //         });
 //         console.log('🔹 Fetched messages for', selectedContact.username, ':', response.data);
 //         setMessages(response.data);
+//         setUnreadCounts((prev) => ({ ...prev, [selectedContact.id]: 0 }));
 //       } catch (error) {
 //         console.error('❌ Error fetching messages:', error);
 //       }
 //     };
 //     fetchMessages();
-//   }, [selectedContact, token]);
+//   }, [selectedContact, token, user?.id]);
 
 //   useEffect(() => {
 //     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 //   }, [messages]);
 
 //   const sendMessage = () => {
-//     if (!socket || !messageInput || !selectedContact || !user) return;
+//     if (!socket || !messageInput || !selectedContact || !user?.id) return;
 //     const messageData = { receiverId: selectedContact.id, content: messageInput };
 //     console.log('🔹 Sending message:', messageData);
 
-//     // Optimistically add the message to the UI
 //     const optimisticMessage: Message = {
 //       senderId: user.id,
 //       receiverId: selectedContact.id,
 //       content: messageInput,
 //       timestamp: new Date().toISOString(),
+//       tempId: uuidv4(),
+//       status: 'sent',
 //     };
 //     setMessages((prev) => [...prev, optimisticMessage]);
 //     socket.emit('sendMessage', messageData);
 //     setMessageInput('');
 //   };
 
-//   if (!user) return <div className="text-gray-400 text-center">Please log in to chat</div>;
+//   const handleTyping = () => {
+//     if (socket && selectedContact && user?.id) {
+//       socket.emit('typing', { senderId: user.id, receiverId: selectedContact.id });
+//     }
+//   };
+
+//   const openProfile = (username: string) => {
+//     window.open(`https://github.com/${username}`, '_blank');
+//   };
+
+//   if (!user?.id) return <div className="text-gray-400 text-center">Please log in to chat</div>;
 
 //   return (
 //     <div className="min-h-screen bg-gray-900 p-8 flex flex-col items-center">
@@ -341,12 +440,33 @@ export default function Chat() {
 //                 <div
 //                   key={contact.id}
 //                   onClick={() => setSelectedContact(contact)}
-//                   className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${
+//                   className={`flex items-center justify-between gap-2 p-2 rounded-lg cursor-pointer ${
 //                     selectedContact?.id === contact.id ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-100'
 //                   }`}
 //                 >
-//                   <img src={contact.avatar} alt={contact.username} className="h-8 w-8 rounded-full" />
-//                   <span>{contact.username}</span>
+//                   <div
+//                     className="flex items-center gap-2 relative group"
+//                     onClick={(e) => {
+//                       e.stopPropagation();
+//                       openProfile(contact.username);
+//                     }}
+//                   >
+//                     <img
+//   src={contact.avatar}
+//   alt={contact.username}
+//   className="h-8 w-8 rounded-full cursor-pointer hover:opacity-75 transition-opacity"
+// />
+
+//                     <span className="cursor-pointer hover:underline">{contact.username}</span>
+//                     <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs p-1 rounded -top-8 left-0">
+//                       View GitHub profile
+//                     </span>
+//                   </div>
+//                   {unreadCounts[contact.id] > 0 && (
+//                     <span className="bg-red-600 text-white rounded-full px-2 py-1 text-xs">
+//                       {unreadCounts[contact.id]}
+//                     </span>
+//                   )}
 //                 </div>
 //               ))
 //             )}
@@ -358,24 +478,38 @@ export default function Chat() {
 //           </h2>
 //           <div className="flex-1 overflow-y-auto mb-4 p-4 bg-gray-900/80 rounded-lg border border-gray-700">
 //             {selectedContact ? (
-//               messages.length === 0 ? (
-//                 <p className="text-gray-400">No messages yet</p>
-//               ) : (
-//                 messages.map((msg, idx) => (
-//                   <div
-//                     key={idx}
-//                     className={`mb-2 p-2 rounded-lg ${
-//                       msg.senderId === user.id ? 'bg-blue-600 text-white ml-auto' : 'bg-gray-700 text-gray-100'
-//                     }`}
-//                     style={{ maxWidth: '70%' }}
-//                   >
-//                     <p>{msg.content}</p>
-//                     <span className="text-xs text-gray-400">
-//                       {new Date(msg.timestamp).toLocaleTimeString()}
-//                     </span>
-//                   </div>
-//                 ))
-//               )
+//               <>
+//                 {messages.length === 0 ? (
+//                   <p className="text-gray-400">No messages yet</p>
+//                 ) : (
+//                   messages.map((msg) => (
+//                     <div
+//                       key={msg._id || msg.tempId}
+//                       className={`mb-2 p-2 rounded-lg flex items-end gap-1 ${
+//                         msg.senderId === user.id ? 'bg-blue-600 text-white ml-auto' : 'bg-gray-700 text-gray-100'
+//                       }`}
+//                       style={{ maxWidth: '70%' }}
+//                     >
+//                       <p>{msg.content}</p>
+//                       {msg.senderId === user.id && (
+//                         <span className="text-gray-400">
+//                           {msg.status === 'delivered' ? (
+//                             <CheckCheck className="h-3 w-3" />
+//                           ) : (
+//                             <Check className="h-3 w-3" />
+//                           )}
+//                         </span>
+//                       )}
+//                       <span className="text-xs text-gray-400 ml-1">
+//                         {new Date(msg.timestamp).toLocaleTimeString()}
+//                       </span>
+//                     </div>
+//                   ))
+//                 )}
+//                 {isTyping && (
+//                   <p className="text-gray-400 text-sm italic">{selectedContact.username} is typing...</p>
+//                 )}
+//               </>
 //             ) : null}
 //             <div ref={messagesEndRef} />
 //           </div>
@@ -384,7 +518,10 @@ export default function Chat() {
 //               <input
 //                 type="text"
 //                 value={messageInput}
-//                 onChange={(e) => setMessageInput(e.target.value)}
+//                 onChange={(e) => {
+//                   setMessageInput(e.target.value);
+//                   handleTyping();
+//                 }}
 //                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
 //                 placeholder="Type a message..."
 //                 className="flex-1 p-2 bg-gray-700 text-gray-100 rounded-lg"
